@@ -1,0 +1,3 @@
+split,total_samples,seq_len_min,seq_len_25pct,seq_len_median,seq_len_75pct,seq_len_95pct,seq_len_99pct,seq_len_max,token_len_min,token_len_median,token_len_95pct,token_len_max
+train,6147,8,57,102,222,607,1538,6130,4,19,97,1006
+val,682,11,58,102,217,603,1267,6213,4,19,103,1038
