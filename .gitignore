@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+.pytest_cache/
+
+# Artifacts & Checkpoints
+outputs/
+checkpoints/
+*.safetensors
+*.bin
+*.pt
+wandb/
+
+# OS / Editor
+.DS_Store
+.idea/
+.vscode/
+*.swp

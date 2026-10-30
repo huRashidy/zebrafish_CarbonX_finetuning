@@ -1,0 +1,58 @@
+# Carbon-X QLoRA Fine-Tuning Configuration for Zebrafish Repeats
+model:
+  model_id: HuggingFaceBio/Carbon-X
+  quantization: 4bit            # 4bit NF4 for 11GB VRAM budget
+  torch_dtype: float16          # RTX 2080 Ti (Turing) uses fp16
+  attn_implementation: sdpa     # SDPA native PyTorch attention
+  max_memory:
+    0: 9.5GiB
+    1: 10.5GiB
+    cpu: 32GiB
+
+lora:
+  r: 16
+  lora_alpha: 32
+  lora_dropout: 0.05
+  target_modules: all-linear
+  target_gpu: 1                 # Only attach LoRA adapters to layers mapped to GPU 1
+  bias: none
+  task_type: CAUSAL_LM
+
+data:
+  raw_csv: data/dr_repeats_8000_balanced.csv
+  train_csv: data/splits/train.csv
+  val_csv: data/splits/val.csv
+  human_test_csv: /home/hussin/repeat_benchmark/data/repeat_class_dataset_2000.csv
+  split_ratio: 0.90
+  random_seed: 42
+  length_bins: [0, 50, 100, 200, 500, 1000, 2000, 100000]
+  length_labels:
+    - "<50"
+    - "50-100"
+    - "100-200"
+    - "200-500"
+    - "500-1000"
+    - "1000-2000"
+    - ">2000"
+
+training:
+  output_dir: outputs/carbonx-zf-qlora
+  per_device_train_batch_size: 1
+  per_device_eval_batch_size: 1
+  gradient_accumulation_steps: 16
+  learning_rate: 0.0002
+  lr_scheduler_type: cosine
+  warmup_ratio: 0.03
+  num_train_epochs: 3
+  logging_steps: 10
+  eval_steps: 50
+  save_steps: 50
+  save_total_limit: 2
+  fp16: true
+  bf16: false
+  gradient_checkpointing: true
+  group_by_length: true
+  optim: paged_adamw_8bit
+  max_length: 4096
+  train_log_csv: results/train_log.csv
+  eval_log_csv: results/eval_log.csv
