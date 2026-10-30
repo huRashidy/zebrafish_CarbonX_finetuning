@@ -189,6 +189,9 @@ def run_evaluation(
             with open(out_path, "w", encoding="utf-8") as f:
                 f.write(header)
 
+        # For sharded models, input tensors must be placed on the first GPU (cuda:0)
+        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
         pbar = tqdm(total=len(df), initial=len(completed_ids), desc=f"Evaluating {Path(test_csv).name}")
         for idx, row in df.iterrows():
             if idx in completed_ids:
@@ -203,7 +206,6 @@ def run_evaluation(
             messages = build_chat_messages(user_prompt)
             prompt_str = format_chat_prompt(tokenizer, messages, add_generation_prompt=True)
 
-            device = getattr(model, "device", next(model.parameters()).device)
             inputs = {k: v.to(device) for k, v in tokenizer(prompt_str, return_tensors="pt").items()}
 
             t0 = time.time()
@@ -245,4 +247,52 @@ def run_evaluation(
     cm_png = out_path.parent / f"confusion_matrix_{out_path.stem}.png"
     plot_confusion_matrix(results_df, cm_png, title=f"Confusion Matrix: {out_path.stem}")
 
+    print("\n" + "=" * 50)
+    print(f"Evaluation Summary: {out_path.stem}")
+    print(f"  Accuracy:         {metrics['accuracy']:.4f}")
+    print(f"  Macro F1:         {metrics['f1_macro']:.4f}")
+    print(f"  Weighted F1:      {metrics['f1_weighted']:.4f}")
+    print(f"  MCC:              {metrics['mcc']:.4f}")
+    print(f"  Invalid Rate:     {metrics['invalid_rate']:.4f}")
+    print("=" * 50)
+
     return metrics
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Evaluate Carbon-X repeat model on validation or test sets")
+    parser.add_argument("--config", default="configs/qlora.yaml", help="Path to config YAML")
+    parser.add_argument("--test-csv", default="data/splits/val.csv", help="Path to evaluation CSV dataset")
+    parser.add_argument("--output-csv", default="results/val_predictions.csv", help="Path to save predictions")
+    parser.add_argument("--adapter-path", default="outputs/carbonx-zf-qlora", help="Path to LoRA adapter directory")
+    parser.add_argument("--species", default="Danio_rerio (zebrafish)", help="Species name in prompt")
+    parser.add_argument("--limit", type=int, default=None, help="Limit number of samples")
+    parser.add_argument("--eval-only", action="store_true", help="Only compute metrics from existing CSV")
+    args = parser.parse_args()
+
+    with open(args.config, "r") as f:
+        config = yaml.safe_load(f)
+
+    df = pd.read_csv(args.test_csv)
+    allowed_classes = sorted(df["repeat_class"].dropna().unique().tolist())
+    print(f"Allowed classes ({len(allowed_classes)}): {allowed_classes}")
+
+    if args.eval_only:
+        tokenizer, model = None, None
+    else:
+        tokenizer, model = load_model_for_evaluation(config["model"], adapter_path=args.adapter_path)
+
+    run_evaluation(
+        model=model,
+        tokenizer=tokenizer,
+        test_csv=args.test_csv,
+        output_csv=args.output_csv,
+        allowed_classes=allowed_classes,
+        species=args.species,
+        limit=args.limit,
+        eval_only=args.eval_only,
+    )
+
+
+if __name__ == "__main__":
+    main()
