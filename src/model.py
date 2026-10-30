@@ -69,16 +69,17 @@ def load_base_model_and_tokenizer(
     else:
         raise ValueError(f"Unsupported quantization: {quant}. Use '4bit' or '8bit'.")
 
-    torch_dtype = getattr(torch, model_cfg.get("torch_dtype", "float16"))
+    dtype_str = model_cfg.get("torch_dtype", "float16")
+    model_dtype = getattr(torch, dtype_str)
     attn_impl = model_cfg.get("attn_implementation", "sdpa")
 
-    print(f"[3/3] Loading {model_id} with {quant} quantization across GPUs...")
+    print(f"[3/3] Loading {model_id} with {quant} NF4 quantization across GPUs...")
     model = AutoModelForCausalLM.from_pretrained(
         model_id,
         quantization_config=bnb_config,
         device_map=model_cfg.get("device_map", "auto"),
         max_memory=max_memory,
-        torch_dtype=torch_dtype,
+        torch_dtype=model_dtype,
         attn_implementation=attn_impl,
         trust_remote_code=True,
     )
@@ -135,7 +136,12 @@ def setup_single_gpu_peft_model(
 
     peft_model = get_peft_model(model, peft_config)
 
-    # Verify device allocation of trainable parameters
+    # In standard QLoRA, trainable adapter weights are float32 to prevent underflow/overflow
+    for name, param in peft_model.named_parameters():
+        if param.requires_grad:
+            param.data = param.data.to(torch.float32)
+
+    # Verify device and dtype allocation of trainable parameters
     trainable_devices = set()
     trainable_param_count = 0
     total_param_count = 0
@@ -143,7 +149,7 @@ def setup_single_gpu_peft_model(
         total_param_count += param.numel()
         if param.requires_grad:
             trainable_param_count += param.numel()
-            trainable_devices.add(str(param.device))
+            trainable_devices.add(f"{param.device} ({param.dtype})")
 
     pct_trainable = 100 * trainable_param_count / total_param_count if total_param_count > 0 else 0
     print(f"  Trainable parameters: {trainable_param_count:,} / {total_param_count:,} ({pct_trainable:.3f}%)")

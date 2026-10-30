@@ -42,16 +42,15 @@ training:
   gradient_accumulation_steps: 16
   learning_rate: 0.0002
   lr_scheduler_type: cosine
-  warmup_ratio: 0.03
+  warmup_steps: 10
   num_train_epochs: 3
   logging_steps: 10
   eval_steps: 50
   save_steps: 50
   save_total_limit: 2
-  fp16: true
+  fp16: false
   bf16: false
   gradient_checkpointing: true
-  group_by_length: true
   optim: paged_adamw_8bit
   max_length: 4096
   train_log_csv: results/train_log.csv
